@@ -1,0 +1,7 @@
+{
+  "name": "FleetFlow Pro",
+  "description": "A comprehensive fleet management platform for tracking truck operations, finances, and maintenance with AI-driven insights.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
