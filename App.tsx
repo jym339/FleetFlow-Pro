@@ -4,10 +4,8 @@ import DashboardHeader from './components/DashboardHeader';
 import StatCard from './components/StatCard';
 import FleetTable from './components/FleetTable';
 import { Truck, TruckStatus, Trip, Driver, Report } from './types';
-import { getFleetInsights } from './services/geminiService';
 import { translations, Language } from './translations';
 import { db } from './services/database';
-import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
 const INITIAL_MOCK_TRUCKS: Truck[] = [
   { id: '1', vin: 'TRK001', plate: 'FLT-101', model: 'Volvo FH16', year: 2022, fuelType: 'Diesel', loadCapacity: 40000, status: TruckStatus.ACTIVE, healthScore: 92, mileage: 45200 },
@@ -17,21 +15,9 @@ const INITIAL_MOCK_TRUCKS: Truck[] = [
   { id: '5', vin: 'TRK005', plate: 'FLT-505', model: 'Freightliner Cascadia', year: 2021, fuelType: 'Diesel', loadCapacity: 40000, status: TruckStatus.ACTIVE, healthScore: 85, mileage: 92000 },
 ];
 
-const REVENUE_DATA = [
-  { name: 'Jan', revenue: 45000, cost: 32000, profit: 13000 },
-  { name: 'Feb', revenue: 52000, cost: 34000, profit: 18000 },
-  { name: 'Mar', revenue: 48000, cost: 31000, profit: 17000 },
-  { name: 'Apr', revenue: 61000, cost: 38000, profit: 23000 },
-  { name: 'May', revenue: 55000, cost: 35000, profit: 20000 },
-  { name: 'Jun', revenue: 67000, cost: 42000, profit: 25000 },
-];
-
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [lang, setLang] = useState<Language>('en');
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [aiInsights, setAiInsights] = useState<any>(null);
-  
   const [trucks, setTrucks] = useState<Truck[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -81,25 +67,6 @@ const App: React.FC = () => {
     };
     initData();
   }, []);
-
-  const fetchAiInsights = async () => {
-    if (trucks.length === 0) return;
-    setIsAiLoading(true);
-    try {
-      const filteredTrips = getFilteredTrips();
-      const data = { trucks, drivers, revenue: REVENUE_DATA, context: activeTab, timeRange, filteredTrips };
-      const insights = await getFleetInsights(data);
-      setAiInsights(insights);
-    } catch (error) {
-      console.error("AI Insight Error:", error);
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!isLoading) fetchAiInsights();
-  }, [lang, activeTab, isLoading, timeRange]);
 
   const handleAddDriver = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -246,7 +213,6 @@ const App: React.FC = () => {
     }
 
     const metrics = getFilteredMetrics();
-    const filteredTrips = getFilteredTrips();
 
     switch (activeTab) {
       case 'reports':
@@ -408,7 +374,7 @@ const App: React.FC = () => {
       case 'overview':
       default:
         return (
-          <>
+          <div className="space-y-10">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               <StatCard title={t.activeTrucks} value={`${trucks.filter(truck => truck.status === TruckStatus.ACTIVE).length} / ${trucks.length}`} trend={{ value: '8.4%', isUp: true }} icon="fa-truck-bolt" color="bg-indigo-500" />
               <StatCard title={`${getTimeRangeLabel()} - ${t.revenue}`} value={`$${metrics.revenue}`} trend={{ value: '12.1%', isUp: true }} icon="fa-chart-line-up" color="bg-emerald-500" />
@@ -417,52 +383,8 @@ const App: React.FC = () => {
                 <StatCard title={t.alerts} value={`${trucks.filter(truck => truck.healthScore < 70).length} ${t.pending}`} icon="fa-bell-exclamation" color="bg-rose-500" />
               </div>
             </div>
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
-              <div className="xl:col-span-8 space-y-8">
-                <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-200/50">
-                  <h3 className="text-xl font-black text-slate-900 mb-8">{t.revVsExp}</h3>
-                  <div className="h-[350px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={REVENUE_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.15}/>
-                            <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.01}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 600}} dy={15} />
-                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 600}} />
-                        <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '12px' }} />
-                        <Area type="monotone" dataKey="revenue" stroke="#4f46e5" fillOpacity={1} fill="url(#colorRevenue)" strokeWidth={4} />
-                        <Area type="monotone" dataKey="cost" stroke="#cbd5e1" fill="transparent" strokeWidth={2} strokeDasharray="6 4" />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              </div>
-              <div className="xl:col-span-4 space-y-8">
-                <div className="bg-slate-900 rounded-[2rem] p-8 text-white shadow-2xl relative overflow-hidden group">
-                  <h3 className="text-lg font-black flex items-center gap-2 mb-6 text-indigo-400"><i className="fas fa-microchip-ai"></i> {t.aiInsights}</h3>
-                  {aiInsights ? (
-                    <div className="space-y-6">
-                      <div className="animate-in slide-in-from-right-4 duration-500">
-                        <p className="text-sm text-slate-300 leading-relaxed font-medium bg-slate-800/50 p-4 rounded-xl border border-white/5">{aiInsights.summary}</p>
-                      </div>
-                      <button onClick={fetchAiInsights} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black rounded-xl uppercase tracking-widest transition-all shadow-lg active:scale-95 disabled:opacity-50" disabled={isAiLoading}>
-                        {isAiLoading ? <i className="fas fa-spinner animate-spin mr-2"></i> : null}
-                        {t.refresh}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700/50 animate-pulse text-xs text-slate-500">
-                      {lang === 'fr' ? 'Analyse de la flotte en cours...' : 'Generating fleet analysis...'}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </>
+            <FleetTable trucks={trucks} onViewDetailedLog={() => setActiveTab('trips')} lang={lang} />
+          </div>
         );
     }
   };
@@ -633,7 +555,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Driver Add Modal (Extended Form) */}
       {showDriverModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl p-10 border border-slate-200 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
@@ -674,7 +595,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* (Rest of modals like Trip, Truck, Maintenance, Report remain unchanged from previous state) */}
       {showMaintenanceModal && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl p-10 border border-slate-200 animate-in zoom-in-95 duration-200 max-h-[80vh] overflow-y-auto">
@@ -699,14 +619,6 @@ const App: React.FC = () => {
                     </div>
                   </div>
                 ))}
-                {trucks.filter(tk => tk.healthScore < 70).length === 0 && (
-                  <div className="py-20 text-center">
-                    <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-500">
-                       <i className="fas fa-check-circle text-3xl"></i>
-                    </div>
-                    <p className="text-slate-500 font-bold">All systems green. No critical alerts found.</p>
-                  </div>
-                )}
              </div>
           </div>
         </div>
