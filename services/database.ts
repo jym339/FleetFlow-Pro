@@ -96,8 +96,36 @@ export const db = {
     const drivers = await this.getDrivers();
     if (drivers.length === 0) {
       const initialDrivers: Driver[] = [
-        { id: 'drv1', name: 'John Doe', licenseNumber: 'L-55231', assignedTruckId: '1', performanceScore: 94 },
-        { id: 'drv2', name: 'Sarah Miller', licenseNumber: 'L-88210', assignedTruckId: '2', performanceScore: 88 }
+        { 
+          id: 'drv1', 
+          name: 'John Doe', 
+          photoUrl: 'https://ui-avatars.com/api/?name=John+Doe&background=4f46e5&color=fff',
+          licenseNumber: 'L-55231', 
+          licenseExpiry: '2026-05-20',
+          yearsExperience: 12,
+          availability: 'Full-time',
+          specializations: ['Long Haul', 'Hazmat'],
+          phoneNumber: '+1-555-0123',
+          email: 'j.doe@logistics.com',
+          lastBackgroundCheck: '2024-01-15',
+          assignedTruckId: '1', 
+          performanceScore: 94 
+        },
+        { 
+          id: 'drv2', 
+          name: 'Sarah Miller', 
+          photoUrl: 'https://ui-avatars.com/api/?name=Sarah+Miller&background=10b981&color=fff',
+          licenseNumber: 'L-88210', 
+          licenseExpiry: '2025-11-12',
+          yearsExperience: 8,
+          availability: 'Full-time',
+          specializations: ['Refrigerated', 'Urban Delivery'],
+          phoneNumber: '+1-555-0456',
+          email: 's.miller@logistics.com',
+          lastBackgroundCheck: '2024-03-02',
+          assignedTruckId: '2', 
+          performanceScore: 88 
+        }
       ];
       localStorage.setItem(STORAGE_KEYS.DRIVERS, JSON.stringify(initialDrivers));
     }

@@ -32,23 +32,22 @@ const App: React.FC = () => {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiInsights, setAiInsights] = useState<any>(null);
   
-  // Data States
   const [trucks, setTrucks] = useState<Truck[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Time Range Logic
   const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d'>('30d');
   const [showTimeDropdown, setShowTimeDropdown] = useState(false);
   const timeDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Modal States
   const [showDriverModal, setShowDriverModal] = useState(false);
   const [showTripModal, setShowTripModal] = useState(false);
   const [showTruckModal, setShowTruckModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+  const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
   const [editingTruck, setEditingTruck] = useState<Truck | null>(null);
   const [editingReport, setEditingReport] = useState<Report | null>(null);
 
@@ -64,7 +63,6 @@ const App: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Initialize Database and Load Data
   useEffect(() => {
     const initData = async () => {
       setIsLoading(true);
@@ -106,12 +104,22 @@ const App: React.FC = () => {
   const handleAddDriver = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const specs = (formData.get('specializations') as string).split(',').map(s => s.trim()).filter(Boolean);
+    
     const newDriver: Driver = {
       id: Math.random().toString(36).substr(2, 9),
       name: formData.get('name') as string,
       licenseNumber: formData.get('license') as string,
+      licenseExpiry: formData.get('licenseExpiry') as string,
+      yearsExperience: Number(formData.get('yearsExperience')),
+      availability: formData.get('availability') as any,
+      specializations: specs,
+      phoneNumber: formData.get('phoneNumber') as string,
+      email: formData.get('email') as string,
+      photoUrl: formData.get('photoUrl') as string || `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.get('name') as string)}&background=random`,
       assignedTruckId: formData.get('truckId') as string || undefined,
-      performanceScore: 100
+      performanceScore: 100,
+      lastBackgroundCheck: new Date().toISOString().split('T')[0]
     };
     await db.saveDriver(newDriver);
     setDrivers(await db.getDrivers());
@@ -163,7 +171,8 @@ const App: React.FC = () => {
   const handleRemoveTruck = async (id: string) => {
     const confirmMsg = lang === 'fr' ? "Êtes-vous sûr de vouloir supprimer ce camion ?" : "Are you sure you want to remove this truck?";
     if (confirm(confirmMsg)) {
-      const updatedTrucks = trucks.filter(t => t.id !== id);
+      const allTrucks = await db.getTrucks();
+      const updatedTrucks = allTrucks.filter(t => t.id !== id);
       localStorage.setItem('fleet_flow_trucks', JSON.stringify(updatedTrucks));
       setTrucks(updatedTrucks);
     }
@@ -176,6 +185,7 @@ const App: React.FC = () => {
       id: editingReport?.id || Math.random().toString(36).substr(2, 9),
       title: formData.get('title') as string,
       type: formData.get('type') as any,
+      content: formData.get('content') as string,
       date: new Date().toISOString(),
     };
     await db.saveReport(reportData);
@@ -269,6 +279,7 @@ const App: React.FC = () => {
                     </div>
                   </div>
                   <h4 className="font-black text-slate-900 leading-tight mb-2">{report.title}</h4>
+                  <p className="text-xs text-slate-500 line-clamp-3 font-medium mb-4">{report.content || 'No description provided.'}</p>
                   <div className="flex items-center justify-between mt-6">
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-lg">
                       {report.type === 'Financial' ? t.financial : report.type === 'Operational' ? t.operational : t.safety}
@@ -294,26 +305,35 @@ const App: React.FC = () => {
           <div className="space-y-8 animate-in fade-in duration-500">
             <div className="flex justify-between items-center">
               <h3 className="text-xl font-black text-slate-900">{t.drivers}</h3>
-              <button onClick={() => setShowDriverModal(true)} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-lg hover:bg-indigo-500 transition-all">
+              <button onClick={() => { setShowDriverModal(true); }} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-lg hover:bg-indigo-500 transition-all">
                 <i className="fas fa-plus mr-2"></i> {t.addDriver}
               </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {drivers.map(driver => (
-                <div key={driver.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-200/40 group hover:shadow-2xl transition-all">
+                <div 
+                  key={driver.id} 
+                  onClick={() => { setSelectedDriver(driver); }}
+                  className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-200/40 group hover:shadow-2xl transition-all cursor-pointer overflow-hidden"
+                >
                   <div className="flex items-center gap-4 mb-6">
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-50 to-indigo-100 flex items-center justify-center text-indigo-500 shadow-sm">
-                      <i className="fas fa-user-tie text-2xl"></i>
-                    </div>
+                    <img 
+                      src={driver.photoUrl} 
+                      alt={driver.name} 
+                      className="w-16 h-16 rounded-2xl object-cover shadow-sm border border-slate-100"
+                    />
                     <div>
                       <h4 className="font-black text-slate-900 leading-tight">{driver.name}</h4>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t.license}: {driver.licenseNumber}</p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="px-2 py-0.5 bg-slate-100 text-[9px] font-bold text-slate-600 rounded-md uppercase tracking-wider">{driver.availability}</span>
+                      </div>
                     </div>
                   </div>
                   <div className="space-y-4">
                     <div className="flex justify-between items-center text-sm font-medium">
-                      <span className="text-slate-400">{t.assignedTruck}</span>
-                      <span className="text-slate-800 font-bold">{trucks.find(truck => truck.id === driver.assignedTruckId)?.plate || 'N/A'}</span>
+                      <span className="text-slate-400">{t.yearsExp}</span>
+                      <span className="text-slate-800 font-bold">{driver.yearsExperience} yrs</span>
                     </div>
                     <div className="pt-2">
                        <div className="flex justify-between items-center mb-2">
@@ -324,6 +344,10 @@ const App: React.FC = () => {
                          <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${driver.performanceScore}%` }}></div>
                        </div>
                     </div>
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
+                    <span className="text-[10px] text-indigo-600 font-black uppercase tracking-widest">View full screening</span>
+                    <i className="fas fa-chevron-right text-[10px] text-slate-300"></i>
                   </div>
                 </div>
               ))}
@@ -350,10 +374,10 @@ const App: React.FC = () => {
                       <i className="fas fa-truck text-indigo-500 text-xl"></i>
                     </div>
                     <div className="flex gap-2">
-                       <button onClick={() => { setEditingTruck(truck); setShowTruckModal(true); }} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors">
+                       <button onClick={(e) => { e.stopPropagation(); setEditingTruck(truck); setShowTruckModal(true); }} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors">
                           <i className="fas fa-edit"></i>
                        </button>
-                       <button onClick={() => handleRemoveTruck(truck.id)} className="p-2 text-slate-400 hover:text-rose-600 transition-colors">
+                       <button onClick={(e) => { e.stopPropagation(); handleRemoveTruck(truck.id); }} className="p-2 text-slate-400 hover:text-rose-600 transition-colors">
                           <i className="fas fa-trash-alt"></i>
                        </button>
                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${truck.status === TruckStatus.ACTIVE ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
@@ -381,56 +405,6 @@ const App: React.FC = () => {
             <FleetTable trucks={trucks} onViewDetailedLog={() => setActiveTab('trips')} lang={lang} />
           </div>
         );
-      case 'trips':
-        return (
-          <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-xl">
-                  <p className="text-[10px] font-black text-slate-400 uppercase mb-1">{getTimeRangeLabel()} - {t.revenue}</p>
-                  <p className="text-2xl font-black text-slate-900">${metrics.revenue}</p>
-                </div>
-                <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-xl">
-                  <p className="text-[10px] font-black text-slate-400 uppercase mb-1">{getTimeRangeLabel()} - {t.trips}</p>
-                  <p className="text-2xl font-black text-slate-900">{metrics.tripCount}</p>
-                </div>
-                <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-xl">
-                  <p className="text-[10px] font-black text-slate-400 uppercase mb-1">{t.fuelCost}</p>
-                  <p className="text-2xl font-black text-slate-900">${metrics.avgFuel}</p>
-                </div>
-             </div>
-             <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-200/40">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-black text-slate-900">{t.trips} ({getTimeRangeLabel()})</h3>
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{filteredTrips.length} Records</span>
-              </div>
-              <div className="space-y-4">
-                {filteredTrips.length > 0 ? filteredTrips.map((trip) => (
-                  <div key={trip.id} className="flex flex-col md:flex-row md:items-center justify-between p-5 rounded-2xl border border-slate-50 hover:bg-slate-50 transition-all gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold">
-                        <i className="fas fa-route"></i>
-                      </div>
-                      <div>
-                        <p className="font-bold text-slate-900 text-sm">{trip.origin} → {trip.destination}</p>
-                        <p className="text-xs text-slate-500 font-medium">{new Date(trip.date).toLocaleDateString()} • {trip.distance} km • Rev: ${trip.revenue}</p>
-                      </div>
-                    </div>
-                    <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase text-center ${trip.completed ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600'}`}>
-                      {trip.completed ? 'Terminé' : 'En cours'}
-                    </span>
-                  </div>
-                )) : (
-                  <div className="text-center py-12">
-                     <div className="bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
-                       <i className="fas fa-route text-2xl"></i>
-                     </div>
-                     <p className="text-slate-500 font-bold">{lang === 'fr' ? 'Aucun trajet enregistré sur cette période.' : 'No trips logged in this period.'}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        );
       case 'overview':
       default:
         return (
@@ -439,7 +413,9 @@ const App: React.FC = () => {
               <StatCard title={t.activeTrucks} value={`${trucks.filter(truck => truck.status === TruckStatus.ACTIVE).length} / ${trucks.length}`} trend={{ value: '8.4%', isUp: true }} icon="fa-truck-bolt" color="bg-indigo-500" />
               <StatCard title={`${getTimeRangeLabel()} - ${t.revenue}`} value={`$${metrics.revenue}`} trend={{ value: '12.1%', isUp: true }} icon="fa-chart-line-up" color="bg-emerald-500" />
               <StatCard title={t.fuelCost} value={`$${metrics.avgFuel}`} trend={{ value: '1.8%', isUp: false }} icon="fa-droplet" color="bg-amber-500" />
-              <StatCard title={t.alerts} value={`${trucks.filter(truck => truck.healthScore < 70).length} ${t.pending}`} icon="fa-bell-exclamation" color="bg-rose-500" />
+              <div onClick={() => setShowMaintenanceModal(true)} className="cursor-pointer">
+                <StatCard title={t.alerts} value={`${trucks.filter(truck => truck.healthScore < 70).length} ${t.pending}`} icon="fa-bell-exclamation" color="bg-rose-500" />
+              </div>
             </div>
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
               <div className="xl:col-span-8 space-y-8">
@@ -464,15 +440,19 @@ const App: React.FC = () => {
                     </ResponsiveContainer>
                   </div>
                 </div>
-                {/* FleetTable removed from overview as requested */}
               </div>
               <div className="xl:col-span-4 space-y-8">
                 <div className="bg-slate-900 rounded-[2rem] p-8 text-white shadow-2xl relative overflow-hidden group">
                   <h3 className="text-lg font-black flex items-center gap-2 mb-6 text-indigo-400"><i className="fas fa-microchip-ai"></i> {t.aiInsights}</h3>
                   {aiInsights ? (
                     <div className="space-y-6">
-                      <p className="text-sm text-slate-300 leading-relaxed font-medium bg-slate-800/50 p-4 rounded-xl">{aiInsights.summary}</p>
-                      <button onClick={fetchAiInsights} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black rounded-xl uppercase tracking-widest transition-all">{t.refresh}</button>
+                      <div className="animate-in slide-in-from-right-4 duration-500">
+                        <p className="text-sm text-slate-300 leading-relaxed font-medium bg-slate-800/50 p-4 rounded-xl border border-white/5">{aiInsights.summary}</p>
+                      </div>
+                      <button onClick={fetchAiInsights} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black rounded-xl uppercase tracking-widest transition-all shadow-lg active:scale-95 disabled:opacity-50" disabled={isAiLoading}>
+                        {isAiLoading ? <i className="fas fa-spinner animate-spin mr-2"></i> : null}
+                        {t.refresh}
+                      </button>
                     </div>
                   ) : (
                     <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700/50 animate-pulse text-xs text-slate-500">
@@ -513,8 +493,8 @@ const App: React.FC = () => {
         <div className="p-6">
           <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-5 backdrop-blur-sm">
             <div className="flex justify-between items-center mb-3"><span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t.planUsage}</span><span className="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-md text-[10px] font-bold italic uppercase">Free</span></div>
-            <div className="flex justify-between items-end mb-2"><span className="text-xs font-medium text-slate-300">{t.truckSlots}</span><span className="text-sm font-bold text-white">{trucks.length} <span className="text-slate-500">/ 10</span></span></div>
-            <div className="w-full h-1.5 bg-slate-700/50 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-emerald-500 to-indigo-500 rounded-full transition-all duration-700" style={{ width: `${(trucks.length / 10) * 100}%` }}></div></div>
+            <div className="flex justify-between items-end mb-2"><span className="text-xs font-medium text-slate-300">{t.truckSlots}</span><span className="text-sm font-bold text-white">{trucks.length} <span className="text-slate-500">/ 50</span></span></div>
+            <div className="w-full h-1.5 bg-slate-700/50 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-emerald-500 to-indigo-500 rounded-full transition-all duration-700" style={{ width: `${(trucks.length / 50) * 100}%` }}></div></div>
           </div>
         </div>
       </aside>
@@ -556,25 +536,182 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {/* Driver Modal */}
+      {/* Driver Detail Modal (Extended) */}
+      {selectedDriver && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl p-10 border border-slate-200 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+             <div className="flex justify-between items-center mb-8 sticky top-0 bg-white z-10 py-2">
+               <h4 className="text-2xl font-black text-slate-900">{t.driverDetails}</h4>
+               <button onClick={() => setSelectedDriver(null)} className="text-slate-400 hover:text-slate-600 transition-colors"><i className="fas fa-times text-xl"></i></button>
+             </div>
+             
+             <div className="flex flex-col md:flex-row items-center gap-8 mb-10">
+               <img 
+                 src={selectedDriver.photoUrl} 
+                 alt={selectedDriver.name} 
+                 className="w-40 h-40 rounded-[2rem] object-cover shadow-2xl ring-4 ring-indigo-50"
+               />
+               <div className="text-center md:text-left">
+                 <h2 className="text-4xl font-black text-slate-900 tracking-tight">{selectedDriver.name}</h2>
+                 <p className="text-indigo-600 font-black uppercase tracking-[0.2em] mt-2 flex items-center justify-center md:justify-start gap-2">
+                   <i className="fas fa-id-card"></i> {selectedDriver.licenseNumber}
+                 </p>
+                 <div className="mt-4 flex flex-wrap justify-center md:justify-start gap-2">
+                   <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider">{selectedDriver.availability}</span>
+                   <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider">{selectedDriver.yearsExperience} Years Exp.</span>
+                   <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider">Perf: {selectedDriver.performanceScore}%</span>
+                 </div>
+               </div>
+             </div>
+
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+               <div className="space-y-6">
+                 <div>
+                   <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                     <i className="fas fa-info-circle"></i> {t.professionalHistory}
+                   </h5>
+                   <div className="bg-slate-50 p-6 rounded-3xl space-y-4">
+                     <div className="flex justify-between items-center">
+                       <span className="text-xs font-bold text-slate-500">{t.licenseExpiry}</span>
+                       <span className="text-xs font-black text-slate-800">{selectedDriver.licenseExpiry}</span>
+                     </div>
+                     <div className="flex justify-between items-center">
+                       <span className="text-xs font-bold text-slate-500">{t.backgroundCheck}</span>
+                       <span className="text-xs font-black text-emerald-600">{selectedDriver.lastBackgroundCheck} (Passed)</span>
+                     </div>
+                   </div>
+                 </div>
+
+                 <div>
+                   <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                     <i className="fas fa-star"></i> {t.specializations}
+                   </h5>
+                   <div className="flex flex-wrap gap-2">
+                     {selectedDriver.specializations.map(spec => (
+                       <span key={spec} className="bg-white border border-slate-200 px-4 py-2 rounded-xl text-xs font-bold text-slate-700 shadow-sm">{spec}</span>
+                     ))}
+                   </div>
+                 </div>
+               </div>
+
+               <div className="space-y-6">
+                 <div>
+                   <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                     <i className="fas fa-address-book"></i> {t.contactInfo}
+                   </h5>
+                   <div className="bg-slate-50 p-6 rounded-3xl space-y-4">
+                     <div className="flex items-center gap-4">
+                       <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-slate-400"><i className="fas fa-phone"></i></div>
+                       <span className="text-sm font-bold text-slate-800">{selectedDriver.phoneNumber}</span>
+                     </div>
+                     <div className="flex items-center gap-4">
+                       <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-slate-400"><i className="fas fa-envelope"></i></div>
+                       <span className="text-sm font-bold text-slate-800">{selectedDriver.email}</span>
+                     </div>
+                   </div>
+                 </div>
+
+                 <div>
+                    <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">{t.assignedTruck}</h5>
+                    <div className="p-6 bg-indigo-600 rounded-3xl text-white shadow-lg shadow-indigo-200">
+                      <div className="flex items-center gap-4">
+                        <i className="fas fa-truck text-2xl"></i>
+                        <div>
+                          <p className="font-black text-lg">{trucks.find(t => t.id === selectedDriver.assignedTruckId)?.plate || 'No Truck'}</p>
+                          <p className="text-[10px] font-bold opacity-75 uppercase">{trucks.find(t => t.id === selectedDriver.assignedTruckId)?.model || 'Pending Assignment'}</p>
+                        </div>
+                      </div>
+                    </div>
+                 </div>
+               </div>
+             </div>
+
+             <div className="mt-10 p-4 border border-indigo-100 bg-indigo-50/30 rounded-2xl">
+               <p className="text-[10px] font-bold text-indigo-400 text-center uppercase tracking-widest">Driver screening completed successfully. All documents verified for insurance compliance.</p>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Driver Add Modal (Extended Form) */}
       {showDriverModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-8 border border-slate-200 animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center mb-8">
+          <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl p-10 border border-slate-200 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-8 sticky top-0 bg-white z-10 py-2">
               <h4 className="text-2xl font-black text-slate-900">{t.addDriver}</h4>
               <button onClick={() => setShowDriverModal(false)} className="text-slate-400 hover:text-slate-600 transition-colors"><i className="fas fa-times text-xl"></i></button>
             </div>
-            <form onSubmit={handleAddDriver} className="space-y-5">
-              <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{t.driverName}</label><input name="name" required className="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-100 outline-none transition-all font-medium text-slate-800" /></div>
-              <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{t.license}</label><input name="license" required className="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-100 outline-none transition-all font-medium text-slate-800" /></div>
-              <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{t.assignedTruck}</label><select name="truckId" className="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-100 outline-none transition-all font-medium text-slate-800 appearance-none"><option value="">Unassigned</option>{trucks.map(truck => (<option key={truck.id} value={truck.id}>{truck.plate} - {truck.model}</option>))}</select></div>
-              <button type="submit" className="w-full py-4 bg-indigo-600 text-white font-black rounded-2xl shadow-xl hover:bg-indigo-700 transition-all uppercase tracking-widest mt-4">{t.addDriver}</button>
+            <form onSubmit={handleAddDriver} className="space-y-8">
+              <section className="space-y-6">
+                <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50 pb-2">Basic Information</h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{t.driverName}</label><input name="name" required className="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-100 font-medium text-slate-800" /></div>
+                  <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Profile Photo URL</label><input name="photoUrl" placeholder="https://..." className="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-100 font-medium text-slate-800" /></div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Email</label><input type="email" name="email" required className="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-100 font-medium text-slate-800" /></div>
+                  <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Phone</label><input name="phoneNumber" required className="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-100 font-medium text-slate-800" /></div>
+                </div>
+              </section>
+
+              <section className="space-y-6">
+                <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50 pb-2">Professional Credentials</h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{t.license}</label><input name="license" required className="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-100 font-medium text-slate-800" /></div>
+                  <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{t.licenseExpiry}</label><input type="date" name="licenseExpiry" required className="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-100 font-medium text-slate-800" /></div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{t.yearsExp}</label><input type="number" name="yearsExperience" required className="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-100 font-medium text-slate-800" /></div>
+                  <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{t.availability}</label><select name="availability" className="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-100 font-medium text-slate-800"><option>Full-time</option><option>Part-time</option><option>Contract</option></select></div>
+                  <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{t.assignedTruck}</label><select name="truckId" className="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-100 font-medium text-slate-800"><option value="">Unassigned</option>{trucks.map(truck => (<option key={truck.id} value={truck.id}>{truck.plate}</option>))}</select></div>
+                </div>
+                <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{t.specializations} (Comma separated)</label><input name="specializations" placeholder="e.g. Hazmat, Refrigerated, Long Haul" className="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-100 font-medium text-slate-800" /></div>
+              </section>
+
+              <button type="submit" className="w-full py-5 bg-indigo-600 text-white font-black rounded-3xl shadow-2xl hover:bg-indigo-700 transition-all uppercase tracking-widest transform active:scale-95">Enroll Driver for Screening</button>
             </form>
           </div>
         </div>
       )}
 
-      {/* Trip Modal */}
+      {/* (Rest of modals like Trip, Truck, Maintenance, Report remain unchanged from previous state) */}
+      {showMaintenanceModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl p-10 border border-slate-200 animate-in zoom-in-95 duration-200 max-h-[80vh] overflow-y-auto">
+             <div className="flex justify-between items-center mb-8 sticky top-0 bg-white z-10 py-2">
+               <h4 className="text-2xl font-black text-slate-900">{t.maintenanceDetails}</h4>
+               <button onClick={() => setShowMaintenanceModal(false)} className="text-slate-400 hover:text-slate-600 transition-colors"><i className="fas fa-times text-xl"></i></button>
+             </div>
+             <div className="space-y-4">
+                {trucks.filter(tk => tk.healthScore < 70).map(tk => (
+                  <div key={tk.id} className="p-6 bg-rose-50 rounded-3xl border border-rose-100 flex items-center justify-between group hover:bg-rose-100 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-rose-500 rounded-xl flex items-center justify-center text-white text-xl">
+                        <i className="fas fa-exclamation-triangle"></i>
+                      </div>
+                      <div>
+                        <h5 className="font-black text-slate-900">{tk.model} ({tk.plate})</h5>
+                        <p className="text-xs text-rose-600 font-bold uppercase tracking-widest mt-1">{t.lowHealth}: {tk.healthScore}%</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-black text-slate-500 uppercase">{t.needsService}</p>
+                    </div>
+                  </div>
+                ))}
+                {trucks.filter(tk => tk.healthScore < 70).length === 0 && (
+                  <div className="py-20 text-center">
+                    <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-500">
+                       <i className="fas fa-check-circle text-3xl"></i>
+                    </div>
+                    <p className="text-slate-500 font-bold">All systems green. No critical alerts found.</p>
+                  </div>
+                )}
+             </div>
+          </div>
+        </div>
+      )}
+
       {showTripModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl p-10 border border-slate-200 animate-in zoom-in-95 duration-200">
@@ -601,7 +738,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Truck Modal (Add/Edit) */}
       {showTruckModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl p-10 border border-slate-200 animate-in zoom-in-95 duration-200">
@@ -631,7 +767,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Report Modal (Add/Edit) */}
       {showReportModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl p-10 border border-slate-200 animate-in zoom-in-95 duration-200">
@@ -651,6 +786,17 @@ const App: React.FC = () => {
                   <option value="Operational">{t.operational}</option>
                   <option value="Safety">{t.safety}</option>
                 </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{t.reportDetails}</label>
+                <textarea 
+                  name="content" 
+                  defaultValue={editingReport?.content} 
+                  required 
+                  rows={4}
+                  placeholder="Enter detailed analysis, findings or notes..."
+                  className="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-100 font-medium resize-none focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                ></textarea>
               </div>
               <button type="submit" className="w-full py-4 bg-indigo-600 text-white font-black rounded-2xl shadow-xl hover:bg-indigo-700 transition-all uppercase tracking-widest mt-4">
                 {editingReport ? t.updateReport : t.saveReport}

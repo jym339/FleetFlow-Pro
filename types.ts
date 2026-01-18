@@ -41,9 +41,17 @@ export interface Trip {
 export interface Driver {
   id: string;
   name: string;
+  photoUrl?: string;
   licenseNumber: string;
+  licenseExpiry: string;
+  yearsExperience: number;
+  specializations: string[]; // e.g., Hazmat, Oversize, Refrigerated
+  availability: 'Full-time' | 'Part-time' | 'Contract';
+  lastBackgroundCheck?: string;
   assignedTruckId?: string;
   performanceScore: number;
+  phoneNumber: string;
+  email: string;
 }
 
 export interface MaintenanceRecord {
