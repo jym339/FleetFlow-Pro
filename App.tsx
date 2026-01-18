@@ -7,7 +7,7 @@ import { Truck, TruckStatus, Trip, Driver, Report } from './types';
 import { getFleetInsights } from './services/geminiService';
 import { translations, Language } from './translations';
 import { db } from './services/database';
-import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
 const INITIAL_MOCK_TRUCKS: Truck[] = [
   { id: '1', vin: 'TRK001', plate: 'FLT-101', model: 'Volvo FH16', year: 2022, fuelType: 'Diesel', loadCapacity: 40000, status: TruckStatus.ACTIVE, healthScore: 92, mileage: 45200 },
@@ -464,7 +464,7 @@ const App: React.FC = () => {
                     </ResponsiveContainer>
                   </div>
                 </div>
-                <FleetTable trucks={trucks} onViewDetailedLog={() => setActiveTab('trips')} lang={lang} />
+                {/* FleetTable removed from overview as requested */}
               </div>
               <div className="xl:col-span-4 space-y-8">
                 <div className="bg-slate-900 rounded-[2rem] p-8 text-white shadow-2xl relative overflow-hidden group">
